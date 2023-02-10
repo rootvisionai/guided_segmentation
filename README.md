@@ -17,7 +17,7 @@ Method we use is similar to [Integrative Few-Shot Learning for Classification an
 9. Get the generated mask and calculate BCELoss with generated mask and expected mask of query image.
 
 ## Results:
-### Support Image & Mask:
+### Support Image | Support Mask | Query Image | Query Mask | Predicted Mask
 ![1](./keep/pred0.png)
 ![2](./keep/pred1.png)
 ![3](./keep/pred2.png)
