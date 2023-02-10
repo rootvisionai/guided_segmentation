@@ -1,0 +1,37 @@
+{
+    "dataset": "cloth_segmentation_fss",
+    "training_images": "images",
+    "training_masks": "masks",
+    "eval_images": "eval_images",
+    "eval_masks": "eval_masks",
+
+    "resnet_arch": "resnet50",
+    "unet_arch": "unet1",
+    "input_size": 512,
+    "epochs": 500,
+    "batch_size": 4,
+    "lr": 0.001,
+    "update_resnet": false,
+    "fpn": false,
+    "device": "cuda",
+
+    "augmentations": {
+        "ShiftScaleRotate": {
+            "shift_limit": 0.2,
+            "scale_limit": 0.2,
+            "rotate_limit": 30,
+            "probability": 0.5
+        },
+        "RGBShift": {
+            "r_shift_limit": 25,
+            "g_shift_limit": 25,
+            "b_shift_limit": 25,
+            "probability": 0.2
+        },
+        "RandomBrightnessContrast": {
+            "brightness_limit":0.3, 
+            "contrast_limit":0.3,
+            "probability": 0.2
+        }
+    }
+}
