@@ -81,24 +81,58 @@ class Set(Dataset):
     def __len__(self):
         return len(self.images_filenames)
 
+    # def __getitem__(self, idx):
+    #     support_image = cv2.imread(self.images_filenames[idx])
+    #     support_image = cv2.cvtColor(support_image, cv2.COLOR_BGR2RGB)
+    #
+    #     support_mask = cv2.imread(self.masks_filenames[idx], cv2.IMREAD_UNCHANGED)
+    #
+    #     key = self.images_filenames[idx].split("-")[-1].split(".")[0]
+    #     query_path = random.choice(self.class_sets[key])
+    #     query_image = cv2.imread(query_path[0])
+    #     query_image = cv2.cvtColor(query_image, cv2.COLOR_BGR2RGB)
+    #
+    #     query_mask = cv2.imread(query_path[1], cv2.IMREAD_UNCHANGED)
+    #
+    #     if self.transform is not None:
+    #         t0 = self.transform(image=support_image, mask=support_mask)
+    #         support_image = t0["image"]/255
+    #         support_mask = t0["mask"]/255
+    #         t1 = self.transform(image=query_image, mask=query_mask)
+    #         query_image = t1["image"]/255
+    #         query_mask = t1["mask"]/255
+    #     return support_image, support_mask, query_image, query_mask
+
     def __getitem__(self, idx):
-        image = cv2.imread(self.images_filenames[idx])
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
-        mask = cv2.imread(self.masks_filenames[idx], cv2.IMREAD_UNCHANGED)
-
-        key = self.images_filenames[idx].split("-")[-1].split(".")[0]
-        query_path = random.choice(self.class_sets[key])
-        query_image = cv2.imread(query_path[0])
+        # Get Query Images and Masks
+        query_image = cv2.imread(self.images_filenames[idx])
         query_image = cv2.cvtColor(query_image, cv2.COLOR_BGR2RGB)
+        query_mask = cv2.imread(self.masks_filenames[idx], cv2.IMREAD_UNCHANGED)
 
-        query_mask = cv2.imread(query_path[1], cv2.IMREAD_UNCHANGED)
+        # Get Support Images and Masks
+        key = self.images_filenames[idx].split("-")[-1].split(".")[0]
+        support_images = []
+        support_masks = []
+
+        support_path = random.choice(self.class_sets[key])
+        support_image = cv2.imread(support_path[0])
+        support_images.append(cv2.cvtColor(support_image, cv2.COLOR_BGR2RGB))
+        support_masks.append(cv2.imread(support_path[1], cv2.IMREAD_UNCHANGED))
+
+        support_path = random.choice(self.class_sets[key])
+        support_image = cv2.imread(support_path[0])
+        support_images.append(cv2.cvtColor(support_image, cv2.COLOR_BGR2RGB))
+        support_masks.append(cv2.imread(support_path[1], cv2.IMREAD_UNCHANGED))
 
         if self.transform is not None:
-            t0 = self.transform(image=image, mask=mask)
-            image = t0["image"]/255
-            mask = t0["mask"]/255
+            t0 = self.transform(image=support_images[0], mask=support_masks[0])
+            support_image_0 = t0["image"]/255
+            support_mask_0 = t0["mask"]/255
+            t0 = self.transform(image=support_images[0], mask=support_masks[0])
+            support_image_1 = t0["image"]/255
+            support_mask_1 = t0["mask"]/255
             t1 = self.transform(image=query_image, mask=query_mask)
             query_image = t1["image"]/255
             query_mask = t1["mask"]/255
-        return image, mask, query_image, query_mask
+        return support_image_0, support_mask_0, support_image_1, support_mask_1, query_image, query_mask

@@ -19,7 +19,6 @@ import tqdm
 import collections
 
 
-
 def main(cfg, net):
     start_epoch = 0
 
@@ -79,57 +78,57 @@ def main(cfg, net):
         net.load_state_dict(checkpoint["state_dict"], False)
         print(f'Model loaded: {os.path.join("checkpoints", cfg.dataset, f"ckpt_size[{cfg.input_size}].pth")}')
         start_epoch = checkpoint["last_epoch"]
-         
+
+    net.to(cfg.device)
     for epoch in range(start_epoch, start_epoch+cfg.epochs):
 
         net.train()
         net.to(cfg.device)
-        
         loss_hist = collections.deque(maxlen=20)
         pbar = tqdm.tqdm(enumerate(train_loader))
         epoch_loss = []
-        for i, (sup_images, sup_masks, query_images, query_masks) in pbar:
-            try:
-                optimizer.zero_grad()
+        for i, (sup_images_0, sup_masks_0, sup_images_1, sup_masks_1, query_images, query_masks) in pbar:
+            optimizer.zero_grad()
 
-                sup_images = sup_images.to(cfg.device)
-                sup_masks = sup_masks.to(cfg.device).unsqueeze(1)
-                query_images = query_images.to(cfg.device)
-                query_masks = query_masks.to("cpu").unsqueeze(1)
-                
-                masks_pred = net(query_images, sup_images, sup_masks)
-                masks_probs_flat = masks_pred.view(-1)
+            sup_images_0 = sup_images_0.to(cfg.device)
+            sup_masks_0 = sup_masks_0.to(cfg.device).unsqueeze(1)
 
-                query_masks = norm_mask_size(query_masks, target_size=(masks_pred.shape[-2], masks_pred.shape[-1]))
-                true_masks_flat = query_masks.view(-1)
+            sup_images_1 = sup_images_1.to(cfg.device)
+            sup_masks_1 = sup_masks_1.to(cfg.device).unsqueeze(1)
 
-                loss = criterion(masks_probs_flat.cpu(), true_masks_flat)
-                loss_hist.append(loss.item())
-                pbar.set_description(f"EPOCH: {epoch} | ITER:{i} | LOSS: {np.mean(loss_hist)} | LR: {optimizer.param_groups[0]['lr']}")
+            query_images = query_images.to(cfg.device)
+            query_masks = query_masks.to("cpu").unsqueeze(1)
 
-                loss.backward()
-                optimizer.step()
-                epoch_loss.append(loss.item())
+            masks_pred = net(query_images, [sup_images_0, sup_images_1], [sup_masks_0, sup_masks_1])
+            masks_probs_flat = masks_pred.view(-1)
 
-                if (i)%100==0:
-                    torchvision.utils.save_image(masks_pred, "./keep/pred.png")
-                    torchvision.utils.save_image(sup_images, "./keep/sup_image.png")
-                    torchvision.utils.save_image(sup_masks, "./keep/sup_mask.png")
-                    torchvision.utils.save_image(query_images, "./keep/query_image.png")
-                    torchvision.utils.save_image(query_masks, "./keep/query_mask.png")
-            except Exception as e:
-                print(e)
+            query_masks = norm_mask_size(query_masks, target_size=(masks_pred.shape[-2], masks_pred.shape[-1]))
+            true_masks_flat = query_masks.view(-1)
+
+            loss = criterion(masks_probs_flat.cpu(), true_masks_flat)
+            loss_hist.append(loss.item())
+            pbar.set_description(f"EPOCH: {epoch} | ITER:{i} | LOSS: {np.mean(loss_hist)} | LR: {optimizer.param_groups[0]['lr']}")
+
+            loss.backward()
+            optimizer.step()
+            epoch_loss.append(loss.item())
+
+            if (i)%100==0:
+                torchvision.utils.save_image(masks_pred, "./keep/pred.png")
+                torchvision.utils.save_image(sup_images_0, "./keep/sup_image.png")
+                torchvision.utils.save_image(sup_masks_0, "./keep/sup_mask.png")
+                torchvision.utils.save_image(query_images, "./keep/query_image.png")
+                torchvision.utils.save_image(query_masks, "./keep/query_mask.png")
         
         scheduler.step(np.mean(epoch_loss))
-        val_dice = eval_net(net, eval_loader, cfg.device)
-        print('Validation Dice Coeff: {}'.format(val_dice))
+        eval_net(net, eval_loader, cfg.device)
 
         torch.save(
             {
                 "state_dict": net.cpu().state_dict(),
                 "last_epoch": epoch
             },
-            os.path.join("checkpoints", cfg.dataset, f'ckpt_size[{cfg.input_size}].pth')
+            os.path.join("checkpoints", cfg.dataset, f'ckpt_arch[{cfg.unet_arch}]_size[{cfg.input_size}].pth')
         )
 
         print('Checkpoint {} saved !'.format(epoch))
@@ -145,13 +144,15 @@ if __name__ == '__main__':
         unet_arch = cfg.unet_arch
     )
 
-    try:
-        main(cfg, net)
+    main(cfg, net)
 
-    except KeyboardInterrupt:
-        torch.save(net.state_dict(), 'INTERRUPTED.pth')
-        print('Saved interrupt')
-        try:
-            sys.exit(0)
-        except SystemExit:
-            os._exit(0)
+    # try:
+    #     main(cfg, net)
+    #
+    # except KeyboardInterrupt:
+    #     torch.save(net.state_dict(), 'INTERRUPTED.pth')
+    #     print('Saved interrupt')
+    #     try:
+    #         sys.exit(0)
+    #     except SystemExit:
+    #         os._exit(0)

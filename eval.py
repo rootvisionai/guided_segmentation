@@ -13,26 +13,21 @@ def eval_net(net, eval_loader, device="cuda"):
         os.makedirs("./inference_examples")
 
     net.eval()
-    tot = 0
     pbar = tqdm.tqdm(enumerate(eval_loader))
-    for i, (sup_images, sup_masks, query_images, query_masks) in pbar:
+    for i, (sup_images, _, sup_masks, _, query_images, query_masks) in pbar:
         with torch.no_grad():
 
-            mask_pred = net(query_images.to(device), sup_images.to(device), sup_masks.to(device).unsqueeze(1))[0]
+            mask_pred = net.infer(query_images.to(device), [sup_images.to(device)], [sup_masks.to(device)])[:, 0]
 
-            si, sm, qi, qm, p = sup_images.cpu(), sup_masks.cpu(), query_images.cpu(), query_masks.cpu(), \
-                torchvision.transforms.functional.resize(mask_pred, (query_images.shape[2],query_images.shape[3])).cpu()
-            sm = torch.stack([sm,sm,sm], dim=1)*255
-            qm = torch.stack([qm,qm,qm], dim=1)*255
-            p  = torch.stack([p,p,p], dim=1)*255
+            si, sm, qi, qm, p = sup_images.cpu(), sup_masks.cpu(), query_images.cpu(), query_masks.cpu(), mask_pred.cpu()
+            qm = torch.stack([qm, qm, qm], dim=1) * 255
+            p = torch.stack([p, p, p], dim=1) * 255
             concat_image_to_save = torch.stack([si[0], sm[0],
                                                 qi[0], qm[0],
                                                 p[0]], dim=0)
             torchvision.utils.save_image(concat_image_to_save, f"./inference_examples/pred{i}.png")
 
-        # tot += dice_coeff(mask_pred.to("cpu"), query_masks.to("cpu").unsqueeze(1)).item()
     net.train()
-    return tot / (i + 1)
 
 if __name__ == '__main__':
     from datasets.base import create_dataloaders, create_transforms

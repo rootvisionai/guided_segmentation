@@ -214,21 +214,26 @@ class FSS(nn.Module):
         cos = torch.stack(cos, dim=0)
         return cos
 
-    def forward(self, xq, xs, mask_support):
+    def one_way_one_shot(self, xq, xs, ms):
+        """
+        xq: query image
+        xs: support image
+        ms: support mask
+        """
+
         # get feature maps
         query_fm1, query_fm2, query_fm3, query_fm4 = self.resnet(xq)
         sup_fm1, sup_fm2, sup_fm3, sup_fm4 = self.resnet(xs)
-        batch_size = xq.shape[0]
 
         fm1_shape = sup_fm1.shape[2:]
         fm2_shape = sup_fm2.shape[2:]
         fm3_shape = sup_fm3.shape[2:]
         fm4_shape = sup_fm4.shape[2:]
 
-        m1 = norm_mask_size(mask_support.type(torch.float), fm1_shape)
-        m2 = norm_mask_size(mask_support.type(torch.float), fm2_shape)
-        m3 = norm_mask_size(mask_support.type(torch.float), fm3_shape)
-        m4 = norm_mask_size(mask_support.type(torch.float), fm4_shape)
+        m1 = norm_mask_size(ms.type(torch.float), fm1_shape)
+        m2 = norm_mask_size(ms.type(torch.float), fm2_shape)
+        m3 = norm_mask_size(ms.type(torch.float), fm3_shape)
+        m4 = norm_mask_size(ms.type(torch.float), fm4_shape)
 
         c1 = self.calculate_cos(sup_fm1*m1, query_fm1)
         c2 = self.calculate_cos(sup_fm2*m2, query_fm2)
@@ -249,104 +254,36 @@ class FSS(nn.Module):
         out = self.unet(unet_input)
         return out
 
+    def one_way_k_shot(self, xq, xs, ms):
+        """
+        xq: query image
+        xs: support image
+        ms: support mask
+        """
+
+        outs = []
+        for i in range(len(ms)): # index N shot
+            outs.append(self.one_way_one_shot(xq, xs[i], ms[i][:, 0, :, :].unsqueeze(1) if ms[i].shape[1]>1 else ms[i]))
+        outs = torch.stack(outs, dim=0).sum(0)/len(ms)
+
+        return outs
+
+    def forward(self, xq, xs, ms):
+        # positive
+        outs_positive = self.one_way_k_shot(xq, xs, ms)
+        outs_negative = self.one_way_k_shot(xq, [1-xs_ for xs_ in xs], [1-ms_ for ms_ in ms])
+        return outs_positive+(1-outs_negative)
+
+    def infer(self, xq, xs, ms, duplicate=True):
+        with torch.no_grad():
+            pred = self.forward(xq, xs, ms)
+        if duplicate:
+            pred = torch.nn.functional.interpolate(pred, size=(xq.shape[2], xq.shape[3]))
+        return pred
+
     def prepare_unet_input(self, unet_input):
         out = torch.nn.functional.interpolate(unet_input["feat0"], scale_factor=2, mode='nearest')
         out += torch.nn.functional.interpolate(unet_input["feat1"], scale_factor=4, mode='nearest')
         out += torch.nn.functional.interpolate(unet_input["feat2"], scale_factor=8, mode='nearest')
         out += torch.nn.functional.interpolate(unet_input["feat3"], scale_factor=16, mode='nearest')
         return out
-
-    # def forward(self, xq, xs, mask_support):
-    #     # get feature maps
-    #     query_fm1, query_fm2, query_fm3, query_fm4 = self.resnet(xq)
-    #     sup_fm1, sup_fm2, sup_fm3, sup_fm4 = self.resnet(xs)
-    #     batch_size = xq.shape[0]
-    #
-    #     fm1_shape = sup_fm1.shape[2:]
-    #     fm2_shape = sup_fm2.shape[2:]
-    #     fm3_shape = sup_fm3.shape[2:]
-    #     fm4_shape = sup_fm4.shape[2:]
-    #
-    #     m1 = norm_mask_size(mask_support.type(torch.float), fm1_shape)
-    #     m2 = norm_mask_size(mask_support.type(torch.float), fm2_shape)
-    #     m3 = norm_mask_size(mask_support.type(torch.float), fm3_shape)
-    #     m4 = norm_mask_size(mask_support.type(torch.float), fm4_shape)
-    #
-    #     query_fm1 = l2_norm(reshape_feat_map(query_fm1))
-    #     query_fm2 = l2_norm(reshape_feat_map(query_fm2))
-    #     query_fm3 = l2_norm(reshape_feat_map(query_fm3))
-    #     query_fm4 = l2_norm(reshape_feat_map(query_fm4))
-    #
-    #     sup_fm1 = l2_norm(reshape_feat_map(sup_fm1))
-    #     sup_fm2 = l2_norm(reshape_feat_map(sup_fm2))
-    #     sup_fm3 = l2_norm(reshape_feat_map(sup_fm3))
-    #     sup_fm4 = l2_norm(reshape_feat_map(sup_fm4))
-    #
-    #     # query_fm1 = self.get_relevant(query_fm1, m1)
-    #     # query_fm2 = self.get_relevant(query_fm2, m2)
-    #     # query_fm3 = self.get_relevant(query_fm3, m3)
-    #     # query_fm4 = self.get_relevant(query_fm4, m4)
-    #     #
-    #     # sup_fm1 = self.get_relevant(sup_fm1, m1)
-    #     # sup_fm2 = self.get_relevant(sup_fm2, m2)
-    #     # sup_fm3 = self.get_relevant(sup_fm3, m3)
-    #     # sup_fm4 = self.get_relevant(sup_fm4, m4)
-    #     #
-    #     # cos1 = self.calculate_cos(query_fm1, sup_fm1)
-    #     # cos2 = self.calculate_cos(query_fm2, sup_fm2)
-    #     # cos3 = self.calculate_cos(query_fm3, sup_fm3)
-    #     # cos4 = self.calculate_cos(query_fm4, sup_fm4)
-    #
-    #     unet_inputs = []
-    #     for bs in range(batch_size):
-    #         cos1 = torch.nn.functional.linear(query_fm1[bs], sup_fm1[bs])
-    #         cos2 = torch.nn.functional.linear(query_fm2[bs], sup_fm2[bs])
-    #         cos3 = torch.nn.functional.linear(query_fm3[bs], sup_fm3[bs])
-    #         cos4 = torch.nn.functional.linear(query_fm4[bs], sup_fm4[bs])
-    #
-    #         # input: batch_size, N^2, N^2 | batch_size*N^2, batch_size*N^2 ->
-    #         # output: batch_size, N^2, N, N
-    #         cos1 = cos1.reshape(fm1_shape[0]*fm1_shape[1], fm1_shape[0], fm1_shape[1])
-    #         cos2 = cos2.reshape(fm2_shape[0]*fm2_shape[1], fm2_shape[0], fm2_shape[1])
-    #         cos3 = cos3.reshape(fm3_shape[0]*fm3_shape[1], fm3_shape[0], fm3_shape[1])
-    #         cos4 = cos4.reshape(fm4_shape[0]*fm4_shape[1], fm4_shape[0], fm4_shape[1])
-    #
-    #         # 2, 1, 64, 64
-    #         # m1flat = m1[bs].reshape(m1[bs].shape[0], m1[bs].shape[1]*m1[bs].shape[2])
-    #         # cos1   = cos1 * m1flat.squeeze(0).unsqueeze(1).unsqueeze(2) # 1, 64*64, 64, 64 # 1, 64*64
-    #         # m2flat = m2[bs].reshape(m2[bs].shape[0], m2[bs].shape[1] * m2[bs].shape[2])
-    #         # cos2   = cos2* m2flat.squeeze(0).unsqueeze(1).unsqueeze(2)
-    #         # m3flat = m3[bs].reshape(m3[bs].shape[0], m3[bs].shape[1] * m3[bs].shape[2])
-    #         # cos3   = cos3 * m3flat.squeeze(0).unsqueeze(1).unsqueeze(2)
-    #         # m4flat = m4[bs].reshape(m4[bs].shape[0], m4[bs].shape[1] * m4[bs].shape[2])
-    #         # cos4   = cos4 * m4flat.squeeze(0).unsqueeze(1).unsqueeze(2)
-    #         # del m1flat, m2flat, m3flat, m4flat; torch.cuda.empty_cache()
-    #
-    #         cos1 = norm_feature_map_size(cos1.unsqueeze(0), target_size=(self.image_size, self.image_size))
-    #         cos2 = norm_feature_map_size(cos2.unsqueeze(0), target_size=(self.image_size, self.image_size))
-    #         cos3 = norm_feature_map_size(cos3.unsqueeze(0), target_size=(self.image_size, self.image_size))
-    #         cos4 = norm_feature_map_size(cos4.unsqueeze(0), target_size=(self.image_size, self.image_size))
-    #
-    #         cos1 = self.feat_map_reduction_1(cos1)
-    #         cos2 = self.feat_map_reduction_2(cos2)
-    #         cos3 = self.feat_map_reduction_3(cos3)
-    #         cos4 = self.feat_map_reduction_4(cos4)
-    #
-    #         unet_inputs.append(torch.cat([cos1.squeeze(0), cos2.squeeze(0), cos3.squeeze(0), cos4.squeeze(0)], dim=0))
-    #
-    #     # del sup_fm1, sup_fm2, sup_fm3, sup_fm4, query_fm1, query_fm2, query_fm4, query_fm4; torch.cuda.empty_cache()
-    #
-    #     unet_inputs = torch.stack(unet_inputs, dim=0)
-    #     unet_inputs = self.bn_out(unet_inputs)
-    #     unet_inputs = self.relu_out(unet_inputs)
-    #
-    #     out = self.unet(unet_inputs)
-    #     return out
-    
-    
-    
-    
-    
-    
-    
-    
