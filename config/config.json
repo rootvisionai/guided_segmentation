@@ -5,12 +5,12 @@
     "eval_images": "eval_images",
     "eval_masks": "eval_masks",
 
-    "resnet_arch": "resnet50",
-    "unet_arch": "unet1",
+    "resnet_arch": "resnet101",
+    "unet_arch": "unet3",
     "input_size": 512,
     "epochs": 500,
     "batch_size": 2,
-    "lr": 0.001,
+    "lr": 0.0001,
     "device": "cuda",
 
     "augmentations": {

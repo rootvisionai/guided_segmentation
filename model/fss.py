@@ -150,7 +150,7 @@ class ResNet(nn.Module):
                     width/column (W/4, W/8, W/16, W/32)
         """
         super(ResNet, self).__init__()
-        self.model = RESNET_ARCHS[arch](weights=torchvision.models.ResNet50_Weights.DEFAULT if pretrained else None)
+        self.model = RESNET_ARCHS[arch](weights=RESNET_WEIGHTS[arch] if pretrained else None)
 
     def forward(self, x):
         x = self.model.conv1(x)
@@ -263,7 +263,7 @@ class FSS(nn.Module):
 
         outs = []
         for i in range(len(ms)): # index N shot
-            outs.append(self.one_way_one_shot(xq, xs[i], ms[i][:, 0, :, :].unsqueeze(1) if ms[i].shape[1]>1 else ms[i]))
+            outs.append(self.one_way_one_shot(xq, xs[i], ms[i]))
         outs = torch.stack(outs, dim=0).sum(0)/len(ms)
 
         return outs
@@ -272,7 +272,7 @@ class FSS(nn.Module):
         # positive
         outs_positive = self.one_way_k_shot(xq, xs, ms)
         outs_negative = self.one_way_k_shot(xq, [1-xs_ for xs_ in xs], [1-ms_ for ms_ in ms])
-        return outs_positive+(1-outs_negative)
+        return outs_positive*(1-outs_negative)
 
     def infer(self, xq, xs, ms, duplicate=True):
         with torch.no_grad():

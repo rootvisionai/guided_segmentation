@@ -14,13 +14,14 @@ def eval_net(net, eval_loader, device="cuda"):
 
     net.eval()
     pbar = tqdm.tqdm(enumerate(eval_loader))
-    for i, (sup_images, _, sup_masks, _, query_images, query_masks) in pbar:
+    for i, (sup_images, sup_masks, _, _, query_images, query_masks) in pbar:
         with torch.no_grad():
 
-            mask_pred = net.infer(query_images.to(device), [sup_images.to(device)], [sup_masks.to(device)])[:, 0]
+            mask_pred = net.infer(query_images.to(device), [sup_images.to(device)], [sup_masks.to(device).unsqueeze(1)])[:, 0]
 
             si, sm, qi, qm, p = sup_images.cpu(), sup_masks.cpu(), query_images.cpu(), query_masks.cpu(), mask_pred.cpu()
             qm = torch.stack([qm, qm, qm], dim=1) * 255
+            sm = torch.stack([sm, sm, sm], dim=1) * 255
             p = torch.stack([p, p, p], dim=1) * 255
             concat_image_to_save = torch.stack([si[0], sm[0],
                                                 qi[0], qm[0],
