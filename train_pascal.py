@@ -51,7 +51,8 @@ def main(cfg, net):
     )
 
     parameters = [
-        {"params": net.resnet.parameters(), "lr": cfg.lr/10},
+        # {"params": net.resnet.parameters(), "lr": cfg.lr/10},
+        {"params": net.mlu.parameters(), "lr": cfg.lr},
         {"params": net.fpn.parameters(), "lr": cfg.lr},
         {"params": net.unet.parameters(), "lr": cfg.lr},
     ]
@@ -75,7 +76,7 @@ def main(cfg, net):
             f'ckpt_size[{cfg.input_size}].pth'
             )
         )
-        net.load_state_dict(checkpoint["state_dict"], False)
+        net.load_state_dict(checkpoint["state_dict"], True)
         print(f'Model loaded: {os.path.join("checkpoints", cfg.dataset, f"ckpt_size[{cfg.input_size}].pth")}')
         start_epoch = checkpoint["last_epoch"]
 
@@ -121,7 +122,6 @@ def main(cfg, net):
                 torchvision.utils.save_image(query_masks, "./keep/query_mask.png")
         
         scheduler.step(np.mean(epoch_loss))
-        eval_net(net, eval_loader, cfg.device)
 
         torch.save(
             {
@@ -130,8 +130,9 @@ def main(cfg, net):
             },
             os.path.join("checkpoints", cfg.dataset, f'ckpt_arch[{cfg.unet_arch}]_size[{cfg.input_size}].pth')
         )
-
         print('Checkpoint {} saved !'.format(epoch))
+
+        eval_net(net, eval_loader, cfg.device)
 
 
 if __name__ == '__main__':

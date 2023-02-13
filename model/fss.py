@@ -167,7 +167,41 @@ class ResNet(nn.Module):
         fm4 = self.model.layer4(fm3)
         
         return (fm1, fm2, fm3, fm4)
-           
+
+class MultilayerUpsample(nn.Module):
+    def __init__(self, feat_sizes):
+        super().__init__()
+
+        self.up0 = nn.Sequential(
+            nn.ConvTranspose2d(feat_sizes[0], feat_sizes[1], 4, stride=2, padding=1),
+            nn.ReLU(inplace=True)
+        )
+        self.up1 = nn.Sequential(
+            nn.ConvTranspose2d(feat_sizes[1], feat_sizes[2], 4, stride=2, padding=1),
+            nn.ReLU(inplace=True)
+        )
+        self.up2 = nn.Sequential(
+            nn.ConvTranspose2d(feat_sizes[2], feat_sizes[3], 4, stride=2, padding=1),
+            nn.ReLU(inplace=True)
+        )
+        self.up3 = nn.Sequential(
+            nn.ConvTranspose2d(feat_sizes[3], feat_sizes[3], 4, stride=2, padding=1),
+            nn.ReLU(inplace=True)
+        )
+        self.up4 = nn.Sequential(
+            nn.ConvTranspose2d(feat_sizes[3], feat_sizes[3], 4, stride=2, padding=1),
+            nn.ReLU(inplace=True)
+        )
+
+    def forward(self, feats):
+        out = self.up0(feats[3])
+        out = self.up1(feats[2] + out)
+        out = self.up2(feats[1] + out)
+        out = self.up3(feats[0] + out)
+        out = self.up4(out)
+        return out
+
+
 UNET_ARCHS = {
     "unet1": UNet,
     "unet2": UNet2,
@@ -176,11 +210,11 @@ UNET_ARCHS = {
 class FSS(nn.Module):
     def __init__(
             self, 
-            input_size = 512, 
+            input_size = 512,
             resnet_arch = "resnet18", 
             unet_arch="unet3", 
             n_classes=1,
-            unet_in_features=256,
+            unet_in_features=64,
             bilinear=True
         ):
         
@@ -190,6 +224,7 @@ class FSS(nn.Module):
         self.unet = UNET_ARCHS[unet_arch](n_channels = unet_in_features, n_classes = n_classes, bilinear=bilinear)
 
         self.fpn = torchvision.ops.FeaturePyramidNetwork([256, 512, 1024, 2048], unet_in_features)
+        self.mlu = MultilayerUpsample(feat_sizes=[unet_in_features, unet_in_features, unet_in_features, unet_in_features])
 
         self.bn_out = nn.BatchNorm2d(unet_in_features)
 
@@ -198,10 +233,6 @@ class FSS(nn.Module):
         m_c = torch.nonzero(m_c, as_tuple=True)
         fm = fm[m_c[0], m_c[1], :]
         return fm
-
-    # def calculate_cos(self, sfm, qfm):
-    #     cos = torch.nn.functional.linear(sfm, qfm)
-    #     return cos
 
     def calculate_cos(self, sup_fm, query_fm):
         sup_fm_linear = sup_fm.view(sup_fm.shape[0], sup_fm.shape[1], -1)
@@ -222,8 +253,9 @@ class FSS(nn.Module):
         """
 
         # get feature maps
-        query_fm1, query_fm2, query_fm3, query_fm4 = self.resnet(xq)
-        sup_fm1, sup_fm2, sup_fm3, sup_fm4 = self.resnet(xs)
+        with torch.no_grad():
+            query_fm1, query_fm2, query_fm3, query_fm4 = self.resnet(xq)
+            sup_fm1, sup_fm2, sup_fm3, sup_fm4 = self.resnet(xs)
 
         fm1_shape = sup_fm1.shape[2:]
         fm2_shape = sup_fm2.shape[2:]
@@ -282,8 +314,15 @@ class FSS(nn.Module):
         return pred
 
     def prepare_unet_input(self, unet_input):
-        out = torch.nn.functional.interpolate(unet_input["feat0"], scale_factor=2, mode='nearest')
-        out += torch.nn.functional.interpolate(unet_input["feat1"], scale_factor=4, mode='nearest')
-        out += torch.nn.functional.interpolate(unet_input["feat2"], scale_factor=8, mode='nearest')
-        out += torch.nn.functional.interpolate(unet_input["feat3"], scale_factor=16, mode='nearest')
+        out = self.mlu([
+            unet_input["feat0"],
+            unet_input["feat1"],
+            unet_input["feat2"],
+            unet_input["feat3"]
+        ])
+
+        # out = torch.nn.functional.interpolate(unet_input["feat0"], scale_factor=2, mode='nearest')
+        # out += torch.nn.functional.interpolate(unet_input["feat1"], scale_factor=4, mode='nearest')
+        # out += torch.nn.functional.interpolate(unet_input["feat2"], scale_factor=8, mode='nearest')
+        # out += torch.nn.functional.interpolate(unet_input["feat3"], scale_factor=16, mode='nearest')
         return out

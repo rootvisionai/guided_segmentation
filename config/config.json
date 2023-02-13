@@ -5,7 +5,7 @@
     "eval_images": "eval_images",
     "eval_masks": "eval_masks",
 
-    "resnet_arch": "resnet101",
+    "resnet_arch": "resnet50",
     "unet_arch": "unet3",
     "input_size": 512,
     "epochs": 500,
