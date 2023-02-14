@@ -36,8 +36,34 @@ class UNet(nn.Module):
         x = self.up4(x, x1)
         x = self.outc(x)
         return x
-    
-    
+
+class FSUNet(nn.Module):
+    def __init__(self, n_channels, n_classes,bilinear=True):
+        super(UNet, self).__init__()
+        self.inc = inconv(n_channels, 64) # 512->512
+        self.down1 = down(64, 128)        # 512->256
+        self.down2 = down(128, 256)       # 256->128
+        self.down3 = down(256, 512)       # 128->64
+        self.down4 = down(512, 512)       # 128->64
+        self.up1 = up(1024, 256,bilinear)
+        self.up2 = up(512, 128,bilinear)
+        self.up3 = up(256, 64,bilinear)
+        self.up4 = up(128, 64,bilinear)
+        self.outc = outconv(64, n_classes)
+
+    def forward(self, x):
+        x1 = self.inc(x)
+        x2 = self.down1(x1)
+        x3 = self.down2(x2)
+        x4 = self.down3(x3)
+        x5 = self.down4(x4)
+        x = self.up1(x5, x4)
+        x = self.up2(x, x3)
+        x = self.up3(x, x2)
+        x = self.up4(x, x1)
+        x = self.outc(x)
+        return x
+
 class UNet2(nn.Module):
     def __init__(self, n_channels, n_classes,bilinear=True):
         super(UNet2, self).__init__()
@@ -168,38 +194,34 @@ class ResNet(nn.Module):
         
         return (fm1, fm2, fm3, fm4)
 
-class MultilayerUpsample(nn.Module):
+class CorrFC(nn.Module):
     def __init__(self, feat_sizes):
         super().__init__()
 
-        self.up0 = nn.Sequential(
-            nn.ConvTranspose2d(feat_sizes[0], feat_sizes[1], 4, stride=2, padding=1),
-            nn.ReLU(inplace=True)
+        self.fc0 = nn.Sequential(
+            nn.Linear(feat_sizes[0], feat_sizes[0]),
+            nn.Softmax(dim=-1)
         )
-        self.up1 = nn.Sequential(
-            nn.ConvTranspose2d(feat_sizes[1], feat_sizes[2], 4, stride=2, padding=1),
-            nn.ReLU(inplace=True)
+        self.fc1 = nn.Sequential(
+            nn.Linear(feat_sizes[1], feat_sizes[1]),
+            nn.Softmax(dim=-1)
         )
-        self.up2 = nn.Sequential(
-            nn.ConvTranspose2d(feat_sizes[2], feat_sizes[3], 4, stride=2, padding=1),
-            nn.ReLU(inplace=True)
+        self.fc2 = nn.Sequential(
+            nn.Linear(feat_sizes[2], feat_sizes[2]),
+            nn.Softmax(dim=-1)
         )
-        self.up3 = nn.Sequential(
-            nn.ConvTranspose2d(feat_sizes[3], feat_sizes[3], 4, stride=2, padding=1),
-            nn.ReLU(inplace=True)
-        )
-        self.up4 = nn.Sequential(
-            nn.ConvTranspose2d(feat_sizes[3], feat_sizes[3], 4, stride=2, padding=1),
-            nn.ReLU(inplace=True)
+        self.fc3 = nn.Sequential(
+            nn.Linear(feat_sizes[3], feat_sizes[3]),
+            nn.Softmax(dim=-1)
         )
 
     def forward(self, feats):
-        out = self.up0(feats[3])
-        out = self.up1(feats[2] + out)
-        out = self.up2(feats[1] + out)
-        out = self.up3(feats[0] + out)
-        out = self.up4(out)
-        return out
+        out0 = self.fc0(feats[0])
+        out1 = self.fc1(feats[1])
+        out2 = self.fc2(feats[2])
+        out3 = self.fc3(feats[3])
+        return out0, out1, out2, out3
+
 
 
 UNET_ARCHS = {
@@ -214,17 +236,17 @@ class FSS(nn.Module):
             resnet_arch = "resnet18", 
             unet_arch="unet3", 
             n_classes=1,
-            unet_in_features=64,
+            unet_in_features=256,
             bilinear=True
         ):
         
         super(FSS, self).__init__()
         self.resnet = ResNet(resnet_arch, pretrained=True)
+        self.corrfc = CorrFC([256, 512, 1024, 2048])
         self.image_size = input_size
         self.unet = UNET_ARCHS[unet_arch](n_channels = unet_in_features, n_classes = n_classes, bilinear=bilinear)
 
-        self.fpn = torchvision.ops.FeaturePyramidNetwork([256, 512, 1024, 2048], unet_in_features)
-        self.mlu = MultilayerUpsample(feat_sizes=[unet_in_features, unet_in_features, unet_in_features, unet_in_features])
+        self.fpn = torchvision.ops.FeaturePyramidNetwork([256, 512, 1024, 2048], int(unet_in_features/4))
 
         self.bn_out = nn.BatchNorm2d(unet_in_features)
 
@@ -274,10 +296,17 @@ class FSS(nn.Module):
 
         fpn_input = OrderedDict()
 
-        fpn_input["feat0"] = query_fm1 * torch.nn.functional.softmax(torch.diagonal(c1, dim1=2), dim=-1).unsqueeze(2).unsqueeze(3)
-        fpn_input["feat1"] = query_fm2 * torch.nn.functional.softmax(torch.diagonal(c2, dim1=2), dim=-1).unsqueeze(2).unsqueeze(3)
-        fpn_input["feat2"] = query_fm3 * torch.nn.functional.softmax(torch.diagonal(c3, dim1=2), dim=-1).unsqueeze(2).unsqueeze(3)
-        fpn_input["feat3"] = query_fm4 * torch.nn.functional.softmax(torch.diagonal(c4, dim1=2), dim=-1).unsqueeze(2).unsqueeze(3)
+        c1 = torch.diagonal(c1, dim1=2)
+        c2 = torch.diagonal(c2, dim1=2)
+        c3 = torch.diagonal(c3, dim1=2)
+        c4 = torch.diagonal(c4, dim1=2)
+
+        c1, c2, c3, c4 = self.corrfc([c1, c2, c3, c4])
+
+        fpn_input["feat0"] = query_fm1 * c1.unsqueeze(2).unsqueeze(3)
+        fpn_input["feat1"] = query_fm2 * c2.unsqueeze(2).unsqueeze(3)
+        fpn_input["feat2"] = query_fm3 * c3.unsqueeze(2).unsqueeze(3)
+        fpn_input["feat3"] = query_fm4 * c4.unsqueeze(2).unsqueeze(3)
 
         unet_input = self.fpn(fpn_input)
         unet_input = self.prepare_unet_input(unet_input)
@@ -293,10 +322,11 @@ class FSS(nn.Module):
         ms: support mask
         """
 
-        outs = []
         for i in range(len(ms)): # index N shot
-            outs.append(self.one_way_one_shot(xq, xs[i], ms[i]))
-        outs = torch.stack(outs, dim=0).sum(0)/len(ms)
+            if i == 0:
+                outs = self.one_way_one_shot(xq, xs[i], ms[i])
+            else:
+                outs += self.one_way_one_shot(xq, xs[i], ms[i])
 
         return outs
 
@@ -314,15 +344,22 @@ class FSS(nn.Module):
         return pred
 
     def prepare_unet_input(self, unet_input):
-        out = self.mlu([
-            unet_input["feat0"],
-            unet_input["feat1"],
-            unet_input["feat2"],
-            unet_input["feat3"]
-        ])
+        # out = self.mlu([
+        #     unet_input["feat0"],
+        #     unet_input["feat1"],
+        #     unet_input["feat2"],
+        #     unet_input["feat3"]
+        # ])
 
         # out = torch.nn.functional.interpolate(unet_input["feat0"], scale_factor=2, mode='nearest')
         # out += torch.nn.functional.interpolate(unet_input["feat1"], scale_factor=4, mode='nearest')
         # out += torch.nn.functional.interpolate(unet_input["feat2"], scale_factor=8, mode='nearest')
         # out += torch.nn.functional.interpolate(unet_input["feat3"], scale_factor=16, mode='nearest')
+
+        out = torch.cat([
+            torch.nn.functional.interpolate(unet_input["feat0"], scale_factor=4, mode='nearest'),
+            torch.nn.functional.interpolate(unet_input["feat1"], scale_factor=8, mode='nearest'),
+            torch.nn.functional.interpolate(unet_input["feat2"], scale_factor=16, mode='nearest'),
+            torch.nn.functional.interpolate(unet_input["feat3"], scale_factor=32, mode='nearest')
+        ], dim=1)
         return out

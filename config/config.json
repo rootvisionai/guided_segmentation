@@ -1,5 +1,5 @@
 {
-    "dataset": "cloth_segmentation_fss",
+    "dataset": "pascal_voc_fss",
     "training_images": "images",
     "training_masks": "masks",
     "eval_images": "eval_images",
@@ -7,10 +7,10 @@
 
     "resnet_arch": "resnet50",
     "unet_arch": "unet3",
-    "input_size": 512,
+    "input_size": 256,
     "epochs": 500,
-    "batch_size": 2,
-    "lr": 0.0001,
+    "batch_size": 8,
+    "lr": 0.00001,
     "device": "cuda",
 
     "augmentations": {

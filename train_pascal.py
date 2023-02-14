@@ -51,8 +51,8 @@ def main(cfg, net):
     )
 
     parameters = [
-        # {"params": net.resnet.parameters(), "lr": cfg.lr/10},
-        {"params": net.mlu.parameters(), "lr": cfg.lr},
+        {"params": net.resnet.parameters(), "lr": cfg.lr},
+        # {"params": net.mlu.parameters(), "lr": cfg.lr},
         {"params": net.fpn.parameters(), "lr": cfg.lr},
         {"params": net.unet.parameters(), "lr": cfg.lr},
     ]
@@ -140,9 +140,10 @@ if __name__ == '__main__':
 
 
     net = FSS(
-        input_size = cfg.input_size,
-        resnet_arch = cfg.resnet_arch,
-        unet_arch = cfg.unet_arch
+        input_size=cfg.input_size,
+        resnet_arch=cfg.resnet_arch,
+        unet_arch=cfg.unet_arch,
+        bilinear=False
     )
 
     main(cfg, net)
