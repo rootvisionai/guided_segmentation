@@ -132,7 +132,7 @@ def main(cfg, net):
         )
         print('Checkpoint {} saved !'.format(epoch))
 
-        eval_net(net, eval_loader, cfg.device)
+        eval_net(net.to(cfg.device), eval_loader, cfg.device)
 
 
 if __name__ == '__main__':

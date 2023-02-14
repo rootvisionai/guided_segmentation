@@ -212,20 +212,23 @@ class PascalVoc(torchvision.datasets.VOCSegmentation):
         return len(self.masks)
 
     def __getitem__(self, i, label=None):
-        query_image, query_mask, label = self.get_single_sample(i)
-        support_image_0, support_mask_0, label = self.get_single_sample(i, label)
-        support_image_1, support_mask_1, label = self.get_single_sample(i, label)
+        try:
+            query_image, query_mask, label = self.get_single_sample(i)
+            support_image_0, support_mask_0, label = self.get_single_sample(i, label)
+            support_image_1, support_mask_1, label = self.get_single_sample(i, label)
 
-        if self.transform is not None:
-            t0 = self.transform(image=support_image_0, mask=support_mask_0)
-            support_image_0 = t0["image"]/255
-            support_mask_0 = t0["mask"]/255
-            t0 = self.transform(image=support_image_1, mask=support_mask_1)
-            support_image_1 = t0["image"]/255
-            support_mask_1 = t0["mask"]/255
-            t1 = self.transform(image=query_image, mask=query_mask)
-            query_image = t1["image"]/255
-            query_mask = t1["mask"]/255
+            if self.transform is not None:
+                t0 = self.transform(image=support_image_0, mask=support_mask_0)
+                support_image_0 = t0["image"]/255
+                support_mask_0 = t0["mask"]/255
+                t0 = self.transform(image=support_image_1, mask=support_mask_1)
+                support_image_1 = t0["image"]/255
+                support_mask_1 = t0["mask"]/255
+                t1 = self.transform(image=query_image, mask=query_mask)
+                query_image = t1["image"]/255
+                query_mask = t1["mask"]/255
+        except:
+            support_image_0, support_mask_0, support_image_1, support_mask_1, query_image, query_mask = self.__getitem__(i+1)
 
         return support_image_0, support_mask_0, support_image_1, support_mask_1, query_image, query_mask
 

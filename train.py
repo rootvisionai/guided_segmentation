@@ -27,10 +27,12 @@ def main(cfg, net):
     images_directory = os.path.join("datasets", cfg.dataset, cfg.training_images)
     masks_directory = os.path.join("datasets", cfg.dataset, cfg.training_masks)
     train_loader = create_dataloaders(
-        images_directory,
-        masks_directory, 
-        transform = trns_train,
-        batch_size = cfg.batch_size,
+        dataset_type="simple",
+        images_directory=images_directory,
+        masks_directory=masks_directory,
+        set_type="train",
+        transform=trns_train,
+        batch_size=cfg.batch_size,
         shuffle=True,
         num_workers=4,
         pin_memory=True,
@@ -40,10 +42,12 @@ def main(cfg, net):
     images_directory = os.path.join("datasets", cfg.dataset, cfg.eval_images)
     masks_directory = os.path.join("datasets", cfg.dataset, cfg.eval_masks)
     eval_loader = create_dataloaders(
-        images_directory,
-        masks_directory, 
-        transform = trns_eval,
-        batch_size = 1,
+        dataset_type="simple",
+        images_directory=images_directory,
+        masks_directory=masks_directory,
+        transform=trns_eval,
+        set_type="eval",
+        batch_size=1,
         shuffle=False,
         num_workers=0,
         pin_memory=True,
