@@ -17,7 +17,11 @@ def eval_net(net, eval_loader, device="cuda"):
     for i, (sup_images, sup_masks, _, _, query_images, query_masks) in pbar:
         with torch.no_grad():
 
-            mask_pred = net.infer(query_images.to(device), [sup_images.to(device)], [sup_masks.to(device).unsqueeze(1)])[:, 0]
+            if i > 99:
+                break
+
+            mask_pred = net.infer(query_images.to(device), [sup_images.to(device)], [sup_masks.to(device).unsqueeze(1)])
+            mask_pred = mask_pred[:, 1]
 
             si, sm, qi, qm, p = sup_images.cpu(), sup_masks.cpu(), query_images.cpu(), query_masks.cpu(), mask_pred.cpu()
             qm = torch.stack([qm, qm, qm], dim=1) * 255
@@ -27,6 +31,7 @@ def eval_net(net, eval_loader, device="cuda"):
                                                 qi[0], qm[0],
                                                 p[0]], dim=0)
             torchvision.utils.save_image(concat_image_to_save, f"./inference_examples/pred{i}.png")
+
 
     net.train()
 

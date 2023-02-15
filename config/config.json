@@ -10,7 +10,7 @@
     "input_size": 256,
     "epochs": 500,
     "batch_size": 8,
-    "lr": 0.00001,
+    "lr": 0.0001,
     "device": "cuda",
 
     "augmentations": {
@@ -18,13 +18,13 @@
             "shift_limit": 0.2,
             "scale_limit": 0.2,
             "rotate_limit": 30,
-            "probability": 0.5
+            "probability": 0.2
         },
         "RGBShift": {
             "r_shift_limit": 25,
             "g_shift_limit": 25,
             "b_shift_limit": 25,
-            "probability": 0.2
+            "probability": 0.0
         },
         "RandomBrightnessContrast": {
             "brightness_limit":0.3, 

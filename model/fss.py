@@ -222,8 +222,6 @@ class CorrFC(nn.Module):
         out3 = self.fc3(feats[3])
         return out0, out1, out2, out3
 
-
-
 UNET_ARCHS = {
     "unet1": UNet,
     "unet2": UNet2,
@@ -334,7 +332,8 @@ class FSS(nn.Module):
         # positive
         outs_positive = self.one_way_k_shot(xq, xs, ms)
         outs_negative = self.one_way_k_shot(xq, [1-xs_ for xs_ in xs], [1-ms_ for ms_ in ms])
-        return outs_positive*(1-outs_negative)
+        outs = torch.cat([outs_negative, outs_positive], dim=1)
+        return outs
 
     def infer(self, xq, xs, ms, duplicate=True):
         with torch.no_grad():
