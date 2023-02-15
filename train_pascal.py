@@ -51,6 +51,7 @@ def main(cfg, net):
 
     parameters = [
         {"params": net.resnet.parameters(), "lr": cfg.lr},
+        {"params": net.corrfc.parameters(), "lr": cfg.lr},
         {"params": net.fpn.parameters(), "lr": cfg.lr},
         {"params": net.unet.parameters(), "lr": cfg.lr},
     ]
