@@ -12,6 +12,7 @@
 *.xml
 *.out
 *.err
+*.txt
 .idea
 *.json
 !config/*.json
