@@ -7,7 +7,6 @@ from torchvision.models import resnet50
 from torchvision.models import resnet101
 
 from .utils import l2_norm, norm_mask_size
-from .unet import UNet, UNet2, UNet3
 
 from collections import OrderedDict
 
@@ -118,20 +117,32 @@ class CorrFC(nn.Module):
         super().__init__()
 
         self.fc0 = nn.Sequential(
-            nn.Linear(feat_sizes[0], feat_sizes[0]),
-            nn.Softmax(dim=-1)
+            nn.Linear(feat_sizes[0], int(feat_sizes[0]/2)),
+            nn.Dropout1d(p=0.2),
+            nn.ReLU(),
+            nn.Linear(int(feat_sizes[0]/2), feat_sizes[0]),
+            nn.Sigmoid()
         )
         self.fc1 = nn.Sequential(
-            nn.Linear(feat_sizes[1], feat_sizes[1]),
-            nn.Softmax(dim=-1)
+            nn.Linear(feat_sizes[1], int(feat_sizes[1]/2)),
+            nn.Dropout1d(p=0.2),
+            nn.ReLU(),
+            nn.Linear(int(feat_sizes[1]/2), feat_sizes[1]),
+            nn.Sigmoid()
         )
         self.fc2 = nn.Sequential(
-            nn.Linear(feat_sizes[2], feat_sizes[2]),
-            nn.Softmax(dim=-1)
+            nn.Linear(feat_sizes[2], int(feat_sizes[2]/2)),
+            nn.Dropout1d(p=0.2),
+            nn.ReLU(),
+            nn.Linear(int(feat_sizes[2]/2), feat_sizes[2]),
+            nn.Sigmoid()
         )
         self.fc3 = nn.Sequential(
-            nn.Linear(feat_sizes[3], feat_sizes[3]),
-            nn.Softmax(dim=-1)
+            nn.Linear(feat_sizes[3], int(feat_sizes[3]/2)),
+            nn.Dropout1d(p=0.2),
+            nn.ReLU(),
+            nn.Linear(int(feat_sizes[3]/2), feat_sizes[3]),
+            nn.Sigmoid()
         )
 
     def forward(self, feats):
@@ -141,11 +152,6 @@ class CorrFC(nn.Module):
         out3 = self.fc3(feats[3])
         return out0, out1, out2, out3
 
-UNET_ARCHS = {
-    "unet1": UNet,
-    "unet2": UNet2,
-    "unet3": UNet3
-}
 class FSS(nn.Module):
     def __init__(
             self, 
@@ -161,7 +167,6 @@ class FSS(nn.Module):
         self.resnet = ResNet(resnet_arch, pretrained=True)
         self.corrfc = CorrFC([256, 512, 1024, 2048])
         self.image_size = input_size
-        # self.unet = UNET_ARCHS[unet_arch](n_channels = unet_in_features, n_classes = n_classes, bilinear=bilinear)
 
         self.fpn = torchvision.ops.FeaturePyramidNetwork([256, 512, 1024, 2048], unet_in_features)
         self.residual_up = ResidualUpsample(in_channel=unet_in_features)
@@ -194,8 +199,7 @@ class FSS(nn.Module):
         # get feature maps
         with torch.no_grad():
             sup_fm1, sup_fm2, sup_fm3, sup_fm4 = self.resnet(xs)
-
-        query_fm1, query_fm2, query_fm3, query_fm4 = self.resnet(xq)
+            query_fm1, query_fm2, query_fm3, query_fm4 = self.resnet(xq)
 
         fm1_shape = sup_fm1.shape[2:]
         fm2_shape = sup_fm2.shape[2:]
@@ -248,13 +252,13 @@ class FSS(nn.Module):
     def forward(self, xq, xs, ms):
         # positive
         outs_positive = self.one_way_k_shot(xq, xs, ms)
-        # outs_negative = self.one_way_k_shot(xq, [1-xs_ for xs_ in xs], [1-ms_ for ms_ in ms])
+        outs_negative = self.one_way_k_shot(xq, [1-xs_ for xs_ in xs], [1-ms_ for ms_ in ms])
         # outs = torch.cat([outs_negative, outs_positive], dim=1)
-        return outs_positive
+        return outs_positive, outs_negative
 
     def infer(self, xq, xs, ms, duplicate=True):
         with torch.no_grad():
-            pred = self.forward(xq, xs, ms)
+            pred, _ = self.forward(xq, xs, ms)
         if duplicate:
             pred = torch.nn.functional.interpolate(pred, size=(xq.shape[2], xq.shape[3]))
         return pred

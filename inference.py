@@ -38,6 +38,7 @@ class Segment:
             print(f'Model loaded: "{cfg.dataset}/ckpt_arch[{cfg.unet_arch}]_size[{cfg.input_size}].pth')
 
         self.model.to(self.device)
+        self.model.eval()
 
         self.support_images = []
         for path in cfg.support.image:

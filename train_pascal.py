@@ -51,7 +51,7 @@ def main(cfg, net):
     )
 
     parameters = [
-        {"params": net.resnet.parameters(), "lr": cfg.lr},
+        # {"params": net.resnet.parameters(), "lr": cfg.lr},
         {"params": net.corrfc.parameters(), "lr": cfg.lr},
         {"params": net.fpn.parameters(), "lr": cfg.lr},
         {"params": net.residual_up.parameters(), "lr": cfg.lr},
@@ -79,7 +79,7 @@ def main(cfg, net):
             f'ckpt_arch[{cfg.unet_arch}]_size[{cfg.input_size}].pth'
             )
         )
-        net.load_state_dict(checkpoint["state_dict"], True)
+        net.load_state_dict(checkpoint["state_dict"], False)
         print(f'Model loaded: f"{cfg.dataset}/ckpt_arch[{cfg.unet_arch}]_size[{cfg.input_size}].pth')
         start_epoch = checkpoint["last_epoch"]
 
@@ -104,15 +104,23 @@ def main(cfg, net):
             query_masks = query_masks.to("cpu").unsqueeze(1)
 
             for _ in range(1):
-                masks_pred = net(query_images, [sup_images_0, sup_images_1], [sup_masks_0, sup_masks_1])
+                masks_pred, masks_pred_ = net(query_images, [sup_images_0, sup_images_1], [sup_masks_0, sup_masks_1])
                 masks_probs_flat = masks_pred.view(-1)
+                masks_probs_flat_ = masks_pred_.view(-1)
 
                 query_masks = norm_mask_size(query_masks, target_size=(masks_pred.shape[-2], masks_pred.shape[-1]))
                 true_masks_flat = query_masks.view(-1)
+                true_masks_flat_ = torch.zeros_like(true_masks_flat)
 
+                # positive sample loss
                 loss = criterion(
                     masks_probs_flat.cpu(),
                     true_masks_flat,
+                )
+                # negative sample loss
+                loss += criterion(
+                    masks_probs_flat_.cpu(),
+                    true_masks_flat_,
                 )
 
                 loss_hist.append(loss.item())
@@ -132,6 +140,9 @@ def main(cfg, net):
                 torchvision.utils.save_image(query_masks, "./keep/query_mask.png")
         
         scheduler.step(np.mean(epoch_loss))
+        pbar.set_description(
+            f"EPOCH: {epoch} | ITER:{i} | LOSS: {np.mean(epoch_loss)} | LR: {optimizer.param_groups[0]['lr']}"
+        )
 
         torch.save(
             {

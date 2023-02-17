@@ -24,7 +24,7 @@ def eval_net(net, eval_loader, device="cuda"):
                 [sup_images_0.to(device), sup_images_1.to(device)],
                 [sup_masks_0.to(device).unsqueeze(1), sup_masks_1.to(device).unsqueeze(1)]
             )
-            mask_pred = mask_pred[0]
+            mask_pred = torch.sigmoid(mask_pred[0])
 
             si, sm, qi, qm, p = sup_images_0.cpu(), sup_masks_0.cpu(), query_images.cpu(), query_masks.cpu(), mask_pred.cpu()
             qm = torch.stack([qm, qm, qm], dim=1) * 255
