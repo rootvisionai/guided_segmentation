@@ -110,6 +110,7 @@ class Segment:
             [elm.to(self.device) for elm in batch["support_imgs"]],
             [elm.to(self.device) for elm in batch["support_masks"]]
         )
+
         mask_pred = torch.sigmoid(mask_pred[0])
 
         pred = self.resize(
@@ -120,7 +121,7 @@ class Segment:
 
         pred *= 255
         pred = pred.cpu().detach().numpy().astype(np.uint8)  # 1,N,H,W -> N,H,W
-
+        print(f"PRED MIN/MAX: {pred.min()}/{pred.max()}")
         # post-processing -> erosion to eliminate small dots on mask, dilate to enlarge the mask
         if self.cfg.postprocessing.erosion:
             pred = cv2.erode(pred, np.ones((self.cfg.postprocessing.erosion,
@@ -184,5 +185,6 @@ if __name__ == '__main__':
 
         save_path = fp.replace("query_images", "results")
         out = cv2.imwrite(save_path, rendered_bbox)
+        # out = cv2.imwrite(save_path.replace(".png", "_mask.png"), rendered_bbox)
 
         pbar.set_description(f"ITER[{i}] FP[{save_path}]")

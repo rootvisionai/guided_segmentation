@@ -5,7 +5,7 @@ device: "cuda"
 num_workers: 0
 
 input_size: 256
-confidence: 0.01
+confidence: 0.5
 
 postprocessing:
   erosion: 0 # 0 ... 3, where 0 is off
@@ -13,8 +13,10 @@ postprocessing:
 
 support:
   mask:  [
+    "support_images/seg_0001_0-1.png",
     "support_images/seg_0010_0-1.png"
   ]
   image: [
+    "support_images/seg_0001_0-1.jpg",
     "support_images/seg_0010_0-1.jpg"
   ]
