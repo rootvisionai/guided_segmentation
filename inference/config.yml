@@ -1,0 +1,20 @@
+dataset: "pascal_voc_fss"
+resnet_arch: "resnet50"
+unet_arch: "unet3"
+device: "cuda"
+num_workers: 0
+
+input_size: 256
+confidence: 0.5
+
+postprocessing:
+  erosion: 0 # 0 ... 3, where 0 is off
+  dilation: 0 # 0 ... 12, where 0 is off
+
+support:
+  mask:  [
+    "support_images/graf_s_0.png"
+  ]
+  image: [
+    "support_images/graf_s_0.jpg"
+  ]

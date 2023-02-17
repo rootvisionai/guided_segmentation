@@ -1,6 +1,5 @@
 import torch, torchvision
 import os
-from dice_loss import dice_coeff
 import tqdm
 from model import FSS
 
@@ -14,16 +13,20 @@ def eval_net(net, eval_loader, device="cuda"):
 
     net.eval()
     pbar = tqdm.tqdm(enumerate(eval_loader))
-    for i, (sup_images, sup_masks, _, _, query_images, query_masks) in pbar:
+    for i, (sup_images_0, sup_masks_0, sup_images_1, sup_masks_1, query_images, query_masks) in pbar:
         with torch.no_grad():
 
             if i > 99:
                 break
 
-            mask_pred = net.infer(query_images.to(device), [sup_images.to(device)], [sup_masks.to(device).unsqueeze(1)])
-            mask_pred = mask_pred[:, 1]
+            mask_pred = net.infer(
+                query_images.to(device),
+                [sup_images_0.to(device), sup_images_1.to(device)],
+                [sup_masks_0.to(device).unsqueeze(1), sup_masks_1.to(device).unsqueeze(1)]
+            )
+            mask_pred = mask_pred[0]
 
-            si, sm, qi, qm, p = sup_images.cpu(), sup_masks.cpu(), query_images.cpu(), query_masks.cpu(), mask_pred.cpu()
+            si, sm, qi, qm, p = sup_images_0.cpu(), sup_masks_0.cpu(), query_images.cpu(), query_masks.cpu(), mask_pred.cpu()
             qm = torch.stack([qm, qm, qm], dim=1) * 255
             sm = torch.stack([sm, sm, sm], dim=1) * 255
             p = torch.stack([p, p, p], dim=1) * 255

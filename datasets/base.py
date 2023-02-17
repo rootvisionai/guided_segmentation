@@ -148,6 +148,7 @@ class PascalVoc(torchvision.datasets.VOCSegmentation):
         """
         super().__init__(**kwargs)
         self.transform = transform
+        self.required_labels = [elm for elm in range(1, 21)]
         self.create_class_sets()
 
     @staticmethod
@@ -156,27 +157,42 @@ class PascalVoc(torchvision.datasets.VOCSegmentation):
         return unqs[1:-1], cnts[1:-1]
 
     def create_class_sets(self):
+        self.masks_ = self.masks
+        self.images_ = self.images
         self.class_sets = {}
         pbar = tqdm.tqdm(range(len(self.masks)))
+        images_ = []
+        masks_ = []
         for i in pbar:
             sample = self.load_images(i)
             unqs, cnts = self.get_labels(sample[1])
-            for j, label in enumerate(unqs):
-                if not label in self.class_sets:
-                    self.class_sets[label] = []
-                self.class_sets[label].append([i, self.images[i], self.masks[i], cnts[j]])
+
+            if any([elm in self.required_labels for elm in unqs]):
+                images_.append(self.images[i])
+                masks_.append(self.masks[i])
+                for j, label in enumerate([elm for elm in unqs if elm in self.required_labels]):
+                    if not label in self.class_sets:
+                        self.class_sets[label] = []
+                    self.class_sets[label].append([i, self.images[i], self.masks[i], cnts[j]])
             pbar.set_description(f"Creating class sets: [{i}/{len(self.masks)}]")
 
         for label in self.class_sets:
-            self.class_sets[label] = sorted(self.class_sets[label], key= lambda x:x[-1], reverse=True)
+            self.class_sets[label] = [elm for elm in self.class_sets[label] if elm[0] < len(masks_)]
+
+        for label in self.class_sets:
+            self.class_sets[label] = sorted(self.class_sets[label], key= lambda x: x[-1], reverse=True)
+
+        self.masks_ = masks_
+        self.images_ = images_
 
     @staticmethod
     def select_label(sample, unqs, label): # if label=None, then get random label & mask of that label
         mask = np.array(sample[1], np.uint8)
         selected_label = random.choice(unqs) if not label else label
-        mask[np.where(mask != selected_label)] = 0
-        mask[np.where(mask == selected_label)] = 255
-        return mask, selected_label
+        mask_ = np.zeros(mask.shape, np.uint8)
+        mask_[np.where(mask != selected_label)] = 0
+        mask_[np.where(mask == selected_label)] = 255
+        return mask_, selected_label
 
     def load_images(self, index: int):
         """
@@ -186,8 +202,8 @@ class PascalVoc(torchvision.datasets.VOCSegmentation):
         Returns:
             tuple: (image, target) where target is the image segmentation.
         """
-        img = Image.open(self.images[index]).convert('RGB')
-        target = Image.open(self.masks[index])
+        img = Image.open(self.images_[index]).convert('RGB')
+        target = Image.open(self.masks_[index])
         return img, target
 
     def get_single_sample(self, i, label=None):
@@ -199,6 +215,7 @@ class PascalVoc(torchvision.datasets.VOCSegmentation):
             sample = self.load_images(il)
         if not label:
             labels, _ = self.get_labels(sample[1])
+            labels = [elm for elm in labels if elm in self.required_labels]
         else:
             labels = None
         mask, label = self.select_label(sample, labels, label)
@@ -209,26 +226,41 @@ class PascalVoc(torchvision.datasets.VOCSegmentation):
         return image, mask, label
 
     def __len__(self):
-        return len(self.masks)
+        return len(self.masks_)
 
     def __getitem__(self, i, label=None):
-        try:
-            query_image, query_mask, label = self.get_single_sample(i)
-            support_image_0, support_mask_0, label = self.get_single_sample(i, label)
-            support_image_1, support_mask_1, label = self.get_single_sample(i, label)
+        query_image, query_mask, label = self.get_single_sample(i)
+        support_image_0, support_mask_0, label = self.get_single_sample(i, label)
+        support_image_1, support_mask_1, label = self.get_single_sample(i, label)
 
-            if self.transform is not None:
-                t0 = self.transform(image=support_image_0, mask=support_mask_0)
-                support_image_0 = t0["image"]/255
-                support_mask_0 = t0["mask"]/255
-                t0 = self.transform(image=support_image_1, mask=support_mask_1)
-                support_image_1 = t0["image"]/255
-                support_mask_1 = t0["mask"]/255
-                t1 = self.transform(image=query_image, mask=query_mask)
-                query_image = t1["image"]/255
-                query_mask = t1["mask"]/255
-        except:
-            support_image_0, support_mask_0, support_image_1, support_mask_1, query_image, query_mask = self.__getitem__(i+1)
+        if self.transform is not None:
+            t0 = self.transform(image=support_image_0, mask=support_mask_0)
+            support_image_0 = t0["image"] / 255
+            support_mask_0 = t0["mask"] / 255
+            t0 = self.transform(image=support_image_1, mask=support_mask_1)
+            support_image_1 = t0["image"] / 255
+            support_mask_1 = t0["mask"] / 255
+            t1 = self.transform(image=query_image, mask=query_mask)
+            query_image = t1["image"] / 255
+            query_mask = t1["mask"] / 255
+        # try:
+        #     query_image, query_mask, label = self.get_single_sample(i)
+        #     support_image_0, support_mask_0, label = self.get_single_sample(i, label)
+        #     support_image_1, support_mask_1, label = self.get_single_sample(i, label)
+        #
+        #     if self.transform is not None:
+        #         t0 = self.transform(image=support_image_0, mask=support_mask_0)
+        #         support_image_0 = t0["image"]/255
+        #         support_mask_0 = t0["mask"]/255
+        #         t0 = self.transform(image=support_image_1, mask=support_mask_1)
+        #         support_image_1 = t0["image"]/255
+        #         support_mask_1 = t0["mask"]/255
+        #         t1 = self.transform(image=query_image, mask=query_mask)
+        #         query_image = t1["image"]/255
+        #         query_mask = t1["mask"]/255
+        # except Exception as e:
+        #     print(e)
+        #     support_image_0, support_mask_0, support_image_1, support_mask_1, query_image, query_mask = self.__getitem__(i+1)
 
         return support_image_0, support_mask_0, support_image_1, support_mask_1, query_image, query_mask
 

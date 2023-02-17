@@ -5,10 +5,11 @@ import numpy as np
 
 import torch
 import torch.nn as nn
-import torchvision.utils
+import torchvision
 from torch import optim
 from model import FSS
 from model.utils import norm_mask_size
+from dice_loss import DiceBCELoss
 
 from datasets.base import create_dataloaders, create_transforms
 from eval import eval_net
@@ -53,12 +54,18 @@ def main(cfg, net):
         {"params": net.resnet.parameters(), "lr": cfg.lr},
         {"params": net.corrfc.parameters(), "lr": cfg.lr},
         {"params": net.fpn.parameters(), "lr": cfg.lr},
-        {"params": net.unet.parameters(), "lr": cfg.lr},
+        {"params": net.residual_up.parameters(), "lr": cfg.lr},
     ]
 
     optimizer = optim.AdamW(parameters)
-    criterion = nn.BCEWithLogitsLoss()
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=1, verbose=True, threshold=0.01)
+    criterion = DiceBCELoss()
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer,
+                                                           mode='min',
+                                                           factor=0.2,
+                                                           patience=2,
+                                                           verbose=True,
+                                                           threshold=0.01,
+                                                           min_lr=0.000001)
 
     if not os.path.isdir(os.path.join(os.getcwd(), "checkpoints", cfg.dataset)):
         os.makedirs(os.path.join(os.getcwd(), "checkpoints", cfg.dataset))
@@ -77,11 +84,12 @@ def main(cfg, net):
         start_epoch = checkpoint["last_epoch"]
 
     net.to(cfg.device)
+    # eval_net(net.to(cfg.device), eval_loader, cfg.device)
     for epoch in range(start_epoch, start_epoch+cfg.epochs):
 
         net.train()
         net.to(cfg.device)
-        loss_hist = collections.deque(maxlen=20)
+        loss_hist = collections.deque(maxlen=50)
         pbar = tqdm.tqdm(enumerate(train_loader))
         epoch_loss = []
         for i, (sup_images_0, sup_masks_0, sup_images_1, sup_masks_1, query_images, query_masks) in pbar:
@@ -94,7 +102,6 @@ def main(cfg, net):
 
             query_images = query_images.to(cfg.device)
             query_masks = query_masks.to("cpu").unsqueeze(1)
-            query_masks = torch.cat([1-query_masks, query_masks], dim=1)
 
             for _ in range(1):
                 masks_pred = net(query_images, [sup_images_0, sup_images_1], [sup_masks_0, sup_masks_1])
@@ -118,11 +125,11 @@ def main(cfg, net):
             epoch_loss.append(loss.item())
 
             if (i)%25==0:
-                torchvision.utils.save_image(masks_pred[:, 1].unsqueeze(1), "./keep/pred.png")
+                torchvision.utils.save_image(masks_pred, "./keep/pred.png")
                 torchvision.utils.save_image(sup_images_0, "./keep/sup_image.png")
                 torchvision.utils.save_image(sup_masks_0, "./keep/sup_mask.png")
                 torchvision.utils.save_image(query_images, "./keep/query_image.png")
-                torchvision.utils.save_image(query_masks[:, 1].unsqueeze(1), "./keep/query_mask.png")
+                torchvision.utils.save_image(query_masks, "./keep/query_mask.png")
         
         scheduler.step(np.mean(epoch_loss))
 
